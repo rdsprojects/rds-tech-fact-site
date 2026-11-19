@@ -1,0 +1,21 @@
+# Dependencies & build artifacts
+node_modules/
+build/
+dist/
+coverage/
+*.tsbuildinfo
+
+# Logs & OS files
+.DS_Store
+*.log
+npm-debug.log*
+
+# Environment & local secrets (never commit real credentials)
+.env
+.env.*
+!.env.example
+
+# Tooling & workspace internals
+.vercel/
+.aistudio/
+workspace/

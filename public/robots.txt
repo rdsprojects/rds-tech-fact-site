@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /rds-tech-fact-site/
+Disallow: /rds-tech-fact-site/admin/
+
+Sitemap: https://rdsprojects.github.io/rds-tech-fact-site/sitemap.xml
