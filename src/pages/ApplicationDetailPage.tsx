@@ -2,6 +2,8 @@ import React, { useEffect } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Check, Download, ExternalLink, Mail, Shield } from 'lucide-react';
 import { useCms } from '../context/CmsContext';
+import { resolveAssetUrl } from '../lib/defaultData';
+import { ApplicationScreenshotsGallery } from '../components/ApplicationScreenshotsGallery';
 
 export const ApplicationDetailPage: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
@@ -46,7 +48,7 @@ export const ApplicationDetailPage: React.FC = () => {
   }
 
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 py-12 lg:py-16 space-y-12">
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 py-12 lg:py-16 space-y-12">
       {isPreview && isAdminAuthenticated && app.status !== 'published' && (
         <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-200 flex items-center justify-between gap-4">
           <span>Admin Preview Mode — This application is currently in "{app.status}" status.</span>
@@ -69,7 +71,7 @@ export const ApplicationDetailPage: React.FC = () => {
         <div className="flex items-start gap-5">
           {app.logo_url ? (
             <img
-              src={app.logo_url}
+              src={resolveAssetUrl(app.logo_url)}
               alt={`${app.name} logo`}
               referrerPolicy="no-referrer"
               className="w-20 h-20 rounded-2xl object-cover border border-white/10 shrink-0"
@@ -160,33 +162,6 @@ export const ApplicationDetailPage: React.FC = () => {
               </ul>
             </section>
           )}
-
-          {app.screenshots && app.screenshots.length > 0 && (
-            <section className="space-y-4">
-              <h2 className="font-display text-xl font-semibold text-[#F8FAFC]">Screenshots</h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {app.screenshots.map((shot) => (
-                  <figure
-                    key={shot.id}
-                    className="rounded-xl overflow-hidden border border-white/10 bg-[#0B1220]"
-                  >
-                    <img
-                      src={shot.image_url}
-                      alt={shot.caption || `${app.name} screenshot`}
-                      loading="lazy"
-                      referrerPolicy="no-referrer"
-                      className="w-full h-56 object-cover"
-                    />
-                    {shot.caption && (
-                      <figcaption className="px-4 py-2.5 text-xs text-[#94A3B8] border-t border-white/10">
-                        {shot.caption}
-                      </figcaption>
-                    )}
-                  </figure>
-                ))}
-              </div>
-            </section>
-          )}
         </div>
 
         {/* Sidebar Info */}
@@ -218,6 +193,11 @@ export const ApplicationDetailPage: React.FC = () => {
           </div>
         </aside>
       </div>
+
+      {/* Full-Width Cover Flow Screenshots Showcase */}
+      {app.screenshots && app.screenshots.length > 0 && (
+        <ApplicationScreenshotsGallery screenshots={app.screenshots} appName={app.name} />
+      )}
     </div>
   );
 };

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { ArrowRight, Layers } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useCms } from '../context/CmsContext';
+import { resolveAssetUrl } from '../lib/defaultData';
 
 const EASE_OUT: [number, number, number, number] = [0.16, 1, 0.3, 1];
 
@@ -63,7 +64,7 @@ export const ApplicationsPage: React.FC = () => {
                   <div className="flex items-center gap-4">
                     {app.logo_url ? (
                       <img
-                        src={app.logo_url}
+                        src={resolveAssetUrl(app.logo_url)}
                         alt={`${app.name} logo`}
                         referrerPolicy="no-referrer"
                         className="w-12 h-12 rounded-xl object-cover border border-white/10 shrink-0"

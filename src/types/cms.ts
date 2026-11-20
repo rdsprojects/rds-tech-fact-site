@@ -52,6 +52,15 @@ export interface PrivacyPolicy {
   updated_at: string;
 }
 
+export interface FounderWorkStatus {
+  enabled: boolean;
+  role: string;
+  organization: string;
+  availability: string;
+  location: string;
+  summary: string;
+}
+
 export interface WebsiteSettings {
   id: number;
   brand_name: string;
@@ -62,6 +71,12 @@ export interface WebsiteSettings {
   founder_title: string;
   founder_intro: string;
   founder_photo_url: string;
+  founder_photos?: string[];
+  founder_photo_interval?: number;
+  founder_work_status?: FounderWorkStatus;
+  founder_resume_url?: string;
+  founder_resume_title?: string;
+  founder_resume_updated_at?: string;
   logo_url?: string;
   favicon_url?: string;
   company_vision: string;

@@ -12,9 +12,11 @@ import {
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useCms } from '../context/CmsContext';
-import { resolveAssetUrl } from '../lib/defaultData';
+import { getFounderPhotoList, resolveAssetUrl } from '../lib/defaultData';
 import { CinematicHeroBackdrop } from '../components/CinematicHeroBackdrop';
 import { BrandLogoMark } from '../components/BrandLogoMark';
+import { FounderPhotoShowcase } from '../components/FounderPhotoShowcase';
+import { FeaturedAppShowcase } from '../components/FeaturedAppShowcase';
 
 const EASE_OUT: [number, number, number, number] = [0.16, 1, 0.3, 1];
 
@@ -138,7 +140,7 @@ export const HomePage: React.FC = () => {
               </motion.div>
             </div>
 
-            {/* Right Column: Founder Portrait */}
+            {/* Right Column: Founder Portrait Gallery (up to 3 photos, configurable interval) */}
             <motion.div
               initial={{ opacity: 0, scale: 0.97 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -150,19 +152,14 @@ export const HomePage: React.FC = () => {
                   aria-hidden="true"
                   className="absolute -inset-px rounded-2xl bg-gradient-to-b from-[#FF3030]/40 via-white/10 to-[#22D3EE]/25"
                 />
-                <div className="relative rounded-2xl overflow-hidden bg-[#050505]">
-                  <img
-                    src={resolveAssetUrl(settings.founder_photo_url)}
-                    alt={`${settings.founder_name}, ${settings.founder_title}`}
-                    referrerPolicy="no-referrer"
-                    className="w-full aspect-[3/4] object-cover object-top"
+                <div className="relative">
+                  <FounderPhotoShowcase
+                    photos={getFounderPhotoList(settings)}
+                    intervalSeconds={settings.founder_photo_interval}
+                    founderName={settings.founder_name}
+                    founderTitle={settings.founder_title}
+                    showCaptionOverlay
                   />
-                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-[#030303] via-[#030303]/85 to-transparent pt-16 pb-5 px-5">
-                    <p className="font-display text-lg font-semibold text-[#F8FAFC]">
-                      {settings.founder_name}
-                    </p>
-                    <p className="text-sm text-[#94A3B8]">{settings.founder_title}</p>
-                  </div>
                 </div>
               </div>
             </motion.div>
@@ -193,100 +190,7 @@ export const HomePage: React.FC = () => {
 
           {featuredApp ? (
             <div className="space-y-6">
-              <motion.div
-                initial={{ opacity: 0, y: 16 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, amount: 0.2 }}
-                transition={{ duration: 0.35, ease: EASE_OUT }}
-                className="rounded-2xl border border-white/10 bg-[#0B1220] p-6 sm:p-8 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center"
-              >
-                <div className="lg:col-span-8 space-y-5">
-                  <div className="flex items-start gap-5">
-                    {featuredApp.logo_url ? (
-                      <img
-                        src={featuredApp.logo_url}
-                        alt={`${featuredApp.name} logo`}
-                        referrerPolicy="no-referrer"
-                        className="w-16 h-16 rounded-xl object-cover border border-white/10 shrink-0"
-                      />
-                    ) : (
-                      <div className="w-16 h-16 rounded-xl bg-[#FF3030]/15 border border-[#FF3030]/35 flex items-center justify-center font-display text-xl font-bold text-[#FF4D4D] shrink-0">
-                        {featuredApp.name.slice(0, 2).toUpperCase()}
-                      </div>
-                    )}
-                    <div className="space-y-1.5 min-w-0">
-                      <div className="flex flex-wrap items-center gap-2 text-xs text-[#94A3B8]">
-                        {featuredApp.category && <span>{featuredApp.category}</span>}
-                        {featuredApp.category && featuredApp.platform && (
-                          <span aria-hidden="true">·</span>
-                        )}
-                        {featuredApp.platform && <span>{featuredApp.platform}</span>}
-                        {(featuredApp.platform || featuredApp.category) && featuredApp.version && (
-                          <span aria-hidden="true">·</span>
-                        )}
-                        {featuredApp.version && (
-                          <span className="font-mono tabular-nums">v{featuredApp.version}</span>
-                        )}
-                      </div>
-                      <h3 className="font-display text-2xl font-bold text-[#F8FAFC]">
-                        {featuredApp.name}
-                      </h3>
-                      <p className="text-[#94A3B8] leading-relaxed">
-                        {featuredApp.short_description}
-                      </p>
-                    </div>
-                  </div>
-
-                  {featuredApp.features && featuredApp.features.length > 0 && (
-                    <div className="flex flex-wrap gap-x-6 gap-y-2 text-xs text-[#94A3B8] pt-1">
-                      {featuredApp.features.slice(0, 4).map((feat, i) => (
-                        <span key={i} className="inline-flex items-center gap-2">
-                          <span className="w-1 h-1 rounded-full bg-[#FF3030]" aria-hidden="true" />
-                          {feat}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-
-                  <div className="pt-2 flex flex-wrap items-center gap-3">
-                    <Link
-                      to={`/applications/${featuredApp.slug}`}
-                      className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-[#FF3030] hover:bg-[#FF4D4D] rounded-lg transition-colors whitespace-nowrap"
-                    >
-                      View Application
-                      <ArrowRight className="w-4 h-4" />
-                    </Link>
-                    {featuredApp.website_url && (
-                      <a
-                        href={featuredApp.website_url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium text-[#F8FAFC] border border-white/15 hover:border-white/30 rounded-lg transition-colors"
-                      >
-                        Visit Website
-                        <ExternalLink className="w-3.5 h-3.5" />
-                      </a>
-                    )}
-                  </div>
-                </div>
-
-                {featuredApp.screenshots && featuredApp.screenshots.length > 0 && (
-                  <div className="lg:col-span-4">
-                    <div className="rounded-xl overflow-hidden border border-white/10 bg-[#050505]">
-                      <img
-                        src={featuredApp.screenshots[0].image_url}
-                        alt={
-                          featuredApp.screenshots[0].caption ||
-                          `${featuredApp.name} preview`
-                        }
-                        loading="lazy"
-                        referrerPolicy="no-referrer"
-                        className="w-full h-48 object-cover"
-                      />
-                    </div>
-                  </div>
-                )}
-              </motion.div>
+              <FeaturedAppShowcase featuredApp={featuredApp} />
 
               {secondaryApps.length > 0 && (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -300,7 +204,7 @@ export const HomePage: React.FC = () => {
                         <div className="flex items-center gap-3.5">
                           {app.logo_url ? (
                             <img
-                              src={app.logo_url}
+                              src={resolveAssetUrl(app.logo_url)}
                               alt={`${app.name} logo`}
                               referrerPolicy="no-referrer"
                               className="w-11 h-11 rounded-xl object-cover border border-white/10 shrink-0"

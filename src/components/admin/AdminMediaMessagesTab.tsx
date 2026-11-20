@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
+  FileText,
   Inbox,
   LifeBuoy,
   Mail,
@@ -17,7 +18,6 @@ import {
   Trash2,
   Upload,
   User,
-  UserCheck,
   X,
 } from 'lucide-react';
 import { useCms } from '../../context/CmsContext';
@@ -89,6 +89,7 @@ function buildMailtoHref(msg: ContactMessage): string {
 
 export const AdminMediaMessagesTab: React.FC<Props> = ({ mode, onNotify }) => {
   const {
+    settings,
     media,
     uploadMediaFile,
     deleteMediaAsset,
@@ -218,52 +219,102 @@ export const AdminMediaMessagesTab: React.FC<Props> = ({ mode, onNotify }) => {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-          {media.map((asset) => (
-            <div
-              key={asset.id}
-              className="rounded-xl border border-slate-800 bg-[#091225] overflow-hidden flex flex-col"
-            >
-              <div className="h-44 bg-[#050b18] flex items-center justify-center overflow-hidden">
-                <img
-                  src={asset.url}
-                  alt={asset.name}
-                  className="w-full h-full object-cover object-top"
-                />
-              </div>
-              <div className="p-4 space-y-3 flex-1 flex flex-col justify-between">
-                <div>
-                  <p className="text-sm font-medium text-white truncate">{asset.name}</p>
-                  <p className="text-xs text-slate-500 font-mono tabular-nums">
-                    {(asset.size / 1024).toFixed(1)} KB
-                  </p>
+          {media.map((asset) => {
+            const isDoc =
+              asset.mime_type === 'application/pdf' ||
+              asset.mime_type.includes('word') ||
+              /\.(pdf|docx?)$/i.test(asset.name);
+
+            const assignSlot = async (slotIdx: 0 | 1 | 2) => {
+              const current = [...(settings.founder_photos || [settings.founder_photo_url])];
+              while (current.length <= slotIdx) current.push('');
+              current[slotIdx] = asset.url;
+              const cleaned = current.map((u) => u.trim()).filter(Boolean).slice(0, 3);
+              const res = await updateSettings({
+                founder_photo_url: slotIdx === 0 ? asset.url : settings.founder_photo_url,
+                founder_photos: cleaned,
+              });
+              onNotify(
+                res.ok,
+                res.ok ? `Assigned to Founder Portrait ${slotIdx + 1}.` : res.message
+              );
+            };
+
+            return (
+              <div
+                key={asset.id}
+                className="rounded-xl border border-slate-800 bg-[#091225] overflow-hidden flex flex-col"
+              >
+                <div className="h-44 bg-[#050b18] flex items-center justify-center overflow-hidden">
+                  {isDoc ? (
+                    <div className="flex flex-col items-center gap-2 text-slate-400 p-4 text-center">
+                      <FileText className="w-10 h-10 text-blue-400" />
+                      <span className="text-xs font-mono">Document Asset</span>
+                    </div>
+                  ) : (
+                    <img
+                      src={asset.url}
+                      alt={asset.name}
+                      className="w-full h-full object-contain bg-[#050b18] p-2"
+                    />
+                  )}
                 </div>
-                <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-800">
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      const res = await updateSettings({ founder_photo_url: asset.url });
-                      onNotify(res.ok, 'Founder photograph updated.');
-                    }}
-                    className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-400 hover:text-blue-300"
-                  >
-                    <UserCheck className="w-3.5 h-3.5" />
-                    Set as Founder Photo
-                  </button>
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      const res = await deleteMediaAsset(asset.id);
-                      onNotify(res.ok, res.message);
-                    }}
-                    aria-label={`Delete ${asset.name}`}
-                    className="text-slate-400 hover:text-red-400 p-1"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                <div className="p-4 space-y-3 flex-1 flex flex-col justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-white truncate">{asset.name}</p>
+                    <p className="text-xs text-slate-500 font-mono tabular-nums">
+                      {(asset.size / 1024).toFixed(1)} KB
+                    </p>
+                  </div>
+                  <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-800">
+                    {isDoc ? (
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const res = await updateSettings({
+                            founder_resume_url: asset.url,
+                            founder_resume_title:
+                              asset.name.replace(/^\d+-/, '').replace(/\.[^.]+$/, '') ||
+                              'Founder Resume',
+                          });
+                          onNotify(res.ok, res.ok ? 'Assigned as Founder Resume.' : res.message);
+                        }}
+                        className="inline-flex items-center gap-1.5 text-xs font-medium text-blue-400 hover:text-blue-300"
+                      >
+                        <FileText className="w-3.5 h-3.5" />
+                        Set as Resume
+                      </button>
+                    ) : (
+                      <div className="flex items-center gap-1.5 text-xs">
+                        <span className="text-slate-400">Founder:</span>
+                        {([0, 1, 2] as const).map((idx) => (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => void assignSlot(idx)}
+                            className="px-1.5 py-0.5 rounded border border-slate-700 hover:border-blue-500 text-blue-400 hover:text-blue-300 font-mono"
+                          >
+                            #{idx + 1}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const res = await deleteMediaAsset(asset.id);
+                        onNotify(res.ok, res.message);
+                      }}
+                      aria-label={`Delete ${asset.name}`}
+                      className="text-slate-400 hover:text-red-400 p-1"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     );

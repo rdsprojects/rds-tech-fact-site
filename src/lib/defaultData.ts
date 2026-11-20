@@ -1,4 +1,10 @@
-import { ApplicationItem, MediaAsset, PrivacyPolicy, WebsiteSettings } from '../types/cms';
+import {
+  ApplicationItem,
+  FounderWorkStatus,
+  MediaAsset,
+  PrivacyPolicy,
+  WebsiteSettings,
+} from '../types/cms';
 
 export function resolveAssetUrl(url: string | undefined | null): string {
   if (!url) return '';
@@ -25,6 +31,40 @@ export const FOUNDER_PHOTO_PATH = resolveAssetUrl(
   '/src/assets/images/founder_dhanasekar_clean_1794988675788.jpg'
 );
 
+export const DEFAULT_FOUNDER_WORK_STATUS: FounderWorkStatus = {
+  enabled: true,
+  role: 'Founder & Software Developer',
+  organization: 'RDS TECH FACT',
+  availability: 'Actively Building Software & Open to Technical Collaborations',
+  location: 'India · Remote / Hybrid',
+  summary:
+    'Designing practical software applications, Python developer utilities, and accessible AI & technology education resources.',
+};
+
+export function getFounderPhotoList(settings: Pick<WebsiteSettings, 'founder_photo_url' | 'founder_photos'>): string[] {
+  const candidates: string[] = [];
+  const rawList = Array.isArray(settings.founder_photos) ? settings.founder_photos : [];
+
+  if (settings.founder_photo_url && settings.founder_photo_url.trim()) {
+    candidates.push(resolveAssetUrl(settings.founder_photo_url));
+  }
+
+  for (const item of rawList) {
+    if (typeof item === 'string' && item.trim()) {
+      const resolved = resolveAssetUrl(item);
+      if (!candidates.includes(resolved)) {
+        candidates.push(resolved);
+      }
+    }
+  }
+
+  if (candidates.length === 0) {
+    candidates.push(FOUNDER_PHOTO_PATH);
+  }
+
+  return candidates.slice(0, 3);
+}
+
 const nowIso = new Date().toISOString();
 const todayDate = nowIso.split('T')[0];
 
@@ -40,6 +80,12 @@ export const DEFAULT_SETTINGS: WebsiteSettings = {
   founder_intro:
     'Dhanasekar R founded RDS TECH FACT with a clear focus on creating dependable software applications, digital utilities, and technical learning resources that solve real-world problems without unnecessary complexity.',
   founder_photo_url: FOUNDER_PHOTO_PATH,
+  founder_photos: [FOUNDER_PHOTO_PATH],
+  founder_photo_interval: 10,
+  founder_work_status: DEFAULT_FOUNDER_WORK_STATUS,
+  founder_resume_url: '',
+  founder_resume_title: 'Dhanasekar R – Resume (PDF)',
+  founder_resume_updated_at: '',
   company_vision:
     'To build trustworthy, accessible software applications and technical education resources that help users and developers work more effectively every day.',
   company_mission:

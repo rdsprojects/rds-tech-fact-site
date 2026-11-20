@@ -11,6 +11,7 @@ import {
 } from '../types/cms';
 import {
   DEFAULT_APPLICATIONS,
+  DEFAULT_FOUNDER_WORK_STATUS,
   DEFAULT_MEDIA,
   DEFAULT_POLICIES,
   DEFAULT_SETTINGS,
@@ -81,8 +82,9 @@ interface CmsContextValue {
   ) => Promise<{ ok: boolean; message: string }>;
   toggleMessageRead: (id: string, isRead: boolean) => Promise<{ ok: boolean; message: string }>;
   deleteContactMessage: (id: string) => Promise<{ ok: boolean; message: string }>;
-  // Media
+  // Media & Resume
   uploadMediaFile: (file: File) => Promise<{ ok: boolean; url?: string; message: string }>;
+  uploadResumeFile: (file: File) => Promise<{ ok: boolean; url?: string; message: string }>;
   deleteMediaAsset: (id: string) => Promise<{ ok: boolean; message: string }>;
 }
 
@@ -149,6 +151,123 @@ function formatDatabaseError(
   }
 
   return code ? `Database error (${code}): ${message}` : message;
+}
+
+const EXTENDED_SETTINGS_STORAGE_KEY = 'rds_extended_settings_fallback_v1';
+
+const CORE_SETTING_KEYS = [
+  'brand_name',
+  'tagline',
+  'hero_heading',
+  'hero_description',
+  'founder_name',
+  'founder_title',
+  'founder_intro',
+  'founder_photo_url',
+  'logo_url',
+  'favicon_url',
+  'company_vision',
+  'company_mission',
+  'why_choose_heading',
+  'seo_title',
+  'seo_description',
+  'contact_email',
+  'support_email',
+  'privacy_email',
+  'footer_copyright',
+  'social_github',
+  'social_linkedin',
+  'social_youtube',
+] as const;
+
+const EXTENDED_SETTING_KEYS = [
+  'founder_photos',
+  'founder_photo_interval',
+  'founder_work_status',
+  'founder_resume_url',
+  'founder_resume_title',
+  'founder_resume_updated_at',
+] as const;
+
+function readExtendedFallback(): Partial<WebsiteSettings> {
+  try {
+    const raw = window.localStorage.getItem(EXTENDED_SETTINGS_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? (parsed as Partial<WebsiteSettings>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeExtendedFallback(patch: Partial<WebsiteSettings>) {
+  try {
+    const current = readExtendedFallback();
+    window.localStorage.setItem(
+      EXTENDED_SETTINGS_STORAGE_KEY,
+      JSON.stringify({ ...current, ...patch })
+    );
+  } catch {
+    // Ignore storage quota errors
+  }
+}
+
+function normalizeWebsiteSettings(raw: Partial<WebsiteSettings>): WebsiteSettings {
+  const hasDbExtended =
+    Object.prototype.hasOwnProperty.call(raw, 'founder_photos') ||
+    Object.prototype.hasOwnProperty.call(raw, 'founder_work_status') ||
+    Object.prototype.hasOwnProperty.call(raw, 'founder_resume_url');
+
+  const mergedSource: Partial<WebsiteSettings> = hasDbExtended
+    ? raw
+    : { ...raw, ...readExtendedFallback() };
+
+  const rawPhotos = Array.isArray(mergedSource.founder_photos)
+    ? mergedSource.founder_photos.filter((u): u is string => typeof u === 'string' && u.trim().length > 0)
+    : [];
+
+  const primaryPhoto =
+    (mergedSource.founder_photo_url && mergedSource.founder_photo_url.trim()) ||
+    rawPhotos[0] ||
+    DEFAULT_SETTINGS.founder_photo_url;
+
+  const uniquePhotos: string[] = [];
+  for (const url of [primaryPhoto, ...rawPhotos]) {
+    const clean = url.trim();
+    if (clean && !uniquePhotos.includes(clean)) {
+      uniquePhotos.push(clean);
+    }
+    if (uniquePhotos.length >= 3) break;
+  }
+
+  const rawInterval = Number(mergedSource.founder_photo_interval);
+  const safeInterval = Number.isFinite(rawInterval)
+    ? Math.min(120, Math.max(3, Math.round(rawInterval)))
+    : 10;
+
+  const rawStatus =
+    mergedSource.founder_work_status && typeof mergedSource.founder_work_status === 'object'
+      ? mergedSource.founder_work_status
+      : {};
+
+  return {
+    ...DEFAULT_SETTINGS,
+    ...mergedSource,
+    founder_photo_url: primaryPhoto,
+    founder_photos: uniquePhotos,
+    founder_photo_interval: safeInterval,
+    founder_work_status: {
+      ...DEFAULT_FOUNDER_WORK_STATUS,
+      ...rawStatus,
+      enabled:
+        typeof (rawStatus as { enabled?: unknown }).enabled === 'boolean'
+          ? (rawStatus as { enabled: boolean }).enabled
+          : DEFAULT_FOUNDER_WORK_STATUS.enabled,
+    },
+    founder_resume_url: mergedSource.founder_resume_url || '',
+    founder_resume_title: mergedSource.founder_resume_title || DEFAULT_SETTINGS.founder_resume_title,
+    founder_resume_updated_at: mergedSource.founder_resume_updated_at || '',
+  };
 }
 
 export const CmsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -375,7 +494,7 @@ export const CmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (settingsRes.error) {
       console.warn('[RDS Data] Failed to load website_settings:', settingsRes.error.message);
     } else if (settingsRes.data) {
-      setSettings(settingsRes.data as WebsiteSettings);
+      setSettings(normalizeWebsiteSettings(settingsRes.data as Partial<WebsiteSettings>));
     }
 
     if (appsRes.error) {
@@ -435,7 +554,7 @@ export const CmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     try {
-      const [msgsRes, storageRes] = await Promise.all([
+      const [msgsRes, storageRes, resumesStorageRes] = await Promise.all([
         client
           .from('contact_messages')
           .select('*')
@@ -444,6 +563,9 @@ export const CmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         client.storage
           .from('rds-media')
           .list('', { limit: 100, sortBy: { column: 'created_at', order: 'desc' } }),
+        client.storage
+          .from('rds-media')
+          .list('resumes', { limit: 50, sortBy: { column: 'created_at', order: 'desc' } }),
       ]);
 
       if (!isMountedRef.current) return;
@@ -459,8 +581,8 @@ export const CmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (storageRes.error) {
         console.warn('[RDS Data] Failed to list rds-media storage:', storageRes.error.message);
       } else if (storageRes.data) {
-        const assets: MediaAsset[] = storageRes.data
-          .filter((item) => item.name && !item.name.startsWith('.'))
+        const rootAssets: MediaAsset[] = storageRes.data
+          .filter((item) => item.name && !item.name.startsWith('.') && item.id !== null)
           .map((item) => {
             const { data: pub } = client.storage.from('rds-media').getPublicUrl(item.name);
             return {
@@ -472,7 +594,24 @@ export const CmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               created_at: item.created_at || new Date().toISOString(),
             };
           });
-        setMedia(assets.length > 0 ? assets : DEFAULT_MEDIA);
+
+        const resumeAssets: MediaAsset[] = (resumesStorageRes.data || [])
+          .filter((item) => item.name && !item.name.startsWith('.') && item.id !== null)
+          .map((item) => {
+            const path = `resumes/${item.name}`;
+            const { data: pub } = client.storage.from('rds-media').getPublicUrl(path);
+            return {
+              id: path,
+              name: item.name,
+              url: pub.publicUrl,
+              size: item.metadata?.size || 0,
+              mime_type: item.metadata?.mimetype || 'application/pdf',
+              created_at: item.created_at || new Date().toISOString(),
+            };
+          });
+
+        const combined = [...resumeAssets, ...rootAssets];
+        setMedia(combined.length > 0 ? combined : DEFAULT_MEDIA);
       }
     } finally {
       if (isMountedRef.current) {
@@ -715,18 +854,95 @@ export const CmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return { ok: false, message: 'Unauthorized action. Please sign in as administrator.' };
     }
 
+    const corePayload: Record<string, unknown> = {};
+    const extendedPayload: Record<string, unknown> = {};
+
+    for (const key of CORE_SETTING_KEYS) {
+      if (Object.prototype.hasOwnProperty.call(next, key) && next[key] !== undefined) {
+        corePayload[key] = next[key];
+      }
+    }
+
+    for (const key of EXTENDED_SETTING_KEYS) {
+      if (Object.prototype.hasOwnProperty.call(next, key) && next[key] !== undefined) {
+        extendedPayload[key] = next[key];
+      }
+    }
+
+    // Keep founder_photo_url synced to the first valid image in founder_photos
+    if (Array.isArray(next.founder_photos)) {
+      const cleanedPhotos = next.founder_photos
+        .map((u) => (typeof u === 'string' ? u.trim() : ''))
+        .filter(Boolean)
+        .slice(0, 3);
+      extendedPayload.founder_photos = cleanedPhotos;
+      if (cleanedPhotos.length > 0 && !corePayload.founder_photo_url) {
+        corePayload.founder_photo_url = cleanedPhotos[0];
+      }
+    }
+
+    if (extendedPayload.founder_photo_interval !== undefined) {
+      const n = Number(extendedPayload.founder_photo_interval);
+      extendedPayload.founder_photo_interval = Number.isFinite(n)
+        ? Math.min(120, Math.max(3, Math.round(n)))
+        : 10;
+    }
+
+    const fullPayload = { ...corePayload, ...extendedPayload };
+
     const { data, error } = await supabase
       .from('website_settings')
-      .update(next)
+      .update(fullPayload)
       .eq('id', 1)
       .select()
       .single();
 
-    if (error) return { ok: false, message: error.message };
+    if (!error && data) {
+      try {
+        window.localStorage.removeItem(EXTENDED_SETTINGS_STORAGE_KEY);
+      } catch {
+        // Ignore storage errors
+      }
+      setSettings(normalizeWebsiteSettings(data as Partial<WebsiteSettings>));
+      logActivity('Updated website settings', 'Global Configuration');
+      return { ok: true, message: 'Website settings saved to Supabase.' };
+    }
 
-    setSettings(data as WebsiteSettings);
-    logActivity('Updated website settings', 'Global Configuration');
-    return { ok: true, message: 'Website settings saved to Supabase.' };
+    const errCode = error?.code || '';
+    const errMsg = (error?.message || '').toLowerCase();
+    const isMissingColumn =
+      errCode === 'PGRST204' ||
+      errCode === '42703' ||
+      errMsg.includes('column') ||
+      errMsg.includes('schema cache');
+
+    if (isMissingColumn && Object.keys(extendedPayload).length > 0) {
+      writeExtendedFallback(extendedPayload as Partial<WebsiteSettings>);
+
+      let coreRow: Partial<WebsiteSettings> = settings;
+      if (Object.keys(corePayload).length > 0) {
+        const coreRes = await supabase
+          .from('website_settings')
+          .update(corePayload)
+          .eq('id', 1)
+          .select()
+          .single();
+        if (coreRes.error) {
+          return { ok: false, message: coreRes.error.message };
+        }
+        coreRow = (coreRes.data || settings) as Partial<WebsiteSettings>;
+      }
+
+      setSettings(normalizeWebsiteSettings({ ...coreRow, ...extendedPayload }));
+      logActivity('Updated website settings (with local profile fallback)', 'Global Configuration');
+      return {
+        ok: true,
+        message:
+          'Core settings saved to Supabase. Run supabase/migrations/004_founder_gallery_status_resume.sql in Supabase SQL Editor so the 3-photo gallery, working status, and resume sync across all devices.',
+      };
+    }
+
+    return { ok: false, message: error?.message || 'Unable to save website settings.' };
   };
 
   const saveApplication = async (
@@ -1094,6 +1310,62 @@ export const CmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return { ok: true, url: pub.publicUrl, message: 'Image uploaded to Supabase Storage.' };
   };
 
+  const uploadResumeFile = async (file: File) => {
+    if (!isAdminAuthenticated || !supabase) {
+      return { ok: false, message: 'Unauthorized action. Please sign in as administrator.' };
+    }
+
+    const allowedMimeTypes = [
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'image/png',
+      'image/jpeg',
+    ];
+    const hasAllowedExt = /\.(pdf|doc|docx|png|jpe?g)$/i.test(file.name);
+    if (!allowedMimeTypes.includes(file.type) && !hasAllowedExt) {
+      return {
+        ok: false,
+        message: 'Only PDF, DOC, DOCX, PNG, or JPEG resume files are permitted.',
+      };
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      return { ok: false, message: 'Resume file must be 10 MB or smaller.' };
+    }
+
+    const safeName = `resumes/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+    const { error } = await supabase.storage.from('rds-media').upload(safeName, file, {
+      cacheControl: '3600',
+      upsert: false,
+      contentType: file.type || 'application/pdf',
+    });
+
+    if (error) {
+      const msgLower = error.message.toLowerCase();
+      if (msgLower.includes('mime type') || msgLower.includes('not supported')) {
+        return {
+          ok: false,
+          message:
+            'Supabase Storage bucket "rds-media" only accepts images right now. Run supabase/migrations/004_founder_gallery_status_resume.sql in Supabase SQL Editor to enable PDF/DOCX uploads, or paste a public Google Drive / PDF URL.',
+        };
+      }
+      return { ok: false, message: error.message };
+    }
+
+    const { data: pub } = supabase.storage.from('rds-media').getPublicUrl(safeName);
+    const asset: MediaAsset = {
+      id: safeName,
+      name: file.name,
+      url: pub.publicUrl,
+      size: file.size,
+      mime_type: file.type || 'application/pdf',
+      created_at: new Date().toISOString(),
+    };
+    setMedia((prev) => [asset, ...prev]);
+    logActivity('Uploaded founder resume', file.name);
+    return { ok: true, url: pub.publicUrl, message: 'Resume uploaded to Supabase Storage.' };
+  };
+
   const deleteMediaAsset = async (id: string) => {
     if (!isAdminAuthenticated || !supabase) {
       return { ok: false, message: 'Unauthorized action.' };
@@ -1136,6 +1408,7 @@ export const CmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         toggleMessageRead,
         deleteContactMessage,
         uploadMediaFile,
+        uploadResumeFile,
         deleteMediaAsset,
       }}
     >

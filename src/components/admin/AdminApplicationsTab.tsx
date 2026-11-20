@@ -1,6 +1,18 @@
 import React, { useState } from 'react';
-import { AlertCircle, Eye, Plus, Trash2, Upload, Edit3, CheckCircle, XCircle } from 'lucide-react';
+import {
+  AlertCircle,
+  ArrowLeft,
+  ArrowRight,
+  CheckCircle,
+  Edit3,
+  Eye,
+  Plus,
+  Trash2,
+  Upload,
+  XCircle,
+} from 'lucide-react';
 import { normalizeSlug, slugify, useCms } from '../../context/CmsContext';
+import { resolveAssetUrl } from '../../lib/defaultData';
 import { ApplicationImage, ApplicationItem, ApplicationStatus } from '../../types/cms';
 
 interface Props {
@@ -439,42 +451,103 @@ export const AdminApplicationsTab: React.FC<Props> = ({ onNotify }) => {
               </div>
             </div>
 
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-slate-200">
-                Screenshots ({form.screenshots.length})
-              </label>
-              <label className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-200 bg-slate-800 hover:bg-slate-700 rounded-lg cursor-pointer">
-                <Upload className="w-4 h-4" />
-                Add Screenshot
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleScreenshotUpload}
-                  className="hidden"
-                />
-              </label>
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <label className="block text-sm font-medium text-slate-200">
+                  Screenshots ({form.screenshots.length})
+                </label>
+                <label className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-200 bg-slate-800 hover:bg-slate-700 rounded-lg cursor-pointer">
+                  <Upload className="w-4 h-4" />
+                  Add Screenshot
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleScreenshotUpload}
+                    className="hidden"
+                  />
+                </label>
+              </div>
               {form.screenshots.length > 0 && (
-                <div className="flex flex-wrap gap-2 pt-2">
-                  {form.screenshots.map((shot) => (
-                    <div key={shot.id} className="relative group">
-                      <img
-                        src={shot.image_url}
-                        alt={shot.caption || 'Screenshot'}
-                        className="w-20 h-14 rounded-lg object-cover border border-slate-700"
-                      />
-                      <button
-                        type="button"
-                        onClick={() =>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                  {form.screenshots.map((shot, idx) => (
+                    <div
+                      key={shot.id}
+                      className="rounded-xl border border-slate-800 bg-[#050b18] p-2.5 space-y-2"
+                    >
+                      <div className="relative h-32 rounded-lg bg-[#030303] flex items-center justify-center overflow-hidden p-1.5">
+                        <img
+                          src={resolveAssetUrl(shot.image_url)}
+                          alt={shot.caption || `Screenshot ${idx + 1}`}
+                          className="max-w-full max-h-full w-auto h-auto object-contain"
+                        />
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setForm((prev) => ({
+                              ...prev,
+                              screenshots: prev.screenshots.filter((s) => s.id !== shot.id),
+                            }))
+                          }
+                          aria-label="Remove screenshot"
+                          className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-red-600/90 hover:bg-red-500 text-white text-xs flex items-center justify-center"
+                        >
+                          ×
+                        </button>
+                      </div>
+                      <input
+                        type="text"
+                        value={shot.caption || ''}
+                        onChange={(e) => {
+                          const val = e.target.value;
                           setForm((prev) => ({
                             ...prev,
-                            screenshots: prev.screenshots.filter((s) => s.id !== shot.id),
-                          }))
-                        }
-                        aria-label="Remove screenshot"
-                        className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-600 text-white text-xs flex items-center justify-center"
-                      >
-                        ×
-                      </button>
+                            screenshots: prev.screenshots.map((s) =>
+                              s.id === shot.id ? { ...s, caption: val } : s
+                            ),
+                          }));
+                        }}
+                        placeholder="Caption (optional)"
+                        className="w-full rounded-md border border-slate-800 bg-[#091225] px-2.5 py-1.5 text-xs text-white focus:border-blue-500 focus:outline-none"
+                      />
+                      {form.screenshots.length > 1 && (
+                        <div className="flex items-center justify-between text-[11px] text-slate-400">
+                          <span className="font-mono tabular-nums">
+                            {idx === 0 ? '#1 (Showcase Lead)' : `#${idx + 1}`}
+                          </span>
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              disabled={idx === 0}
+                              onClick={() =>
+                                setForm((prev) => {
+                                  const next = [...prev.screenshots];
+                                  [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
+                                  return { ...prev, screenshots: next };
+                                })
+                              }
+                              aria-label="Move screenshot left"
+                              className="p-1 rounded border border-slate-800 hover:border-slate-600 disabled:opacity-30"
+                            >
+                              <ArrowLeft className="w-3 h-3" />
+                            </button>
+                            <button
+                              type="button"
+                              disabled={idx === form.screenshots.length - 1}
+                              onClick={() =>
+                                setForm((prev) => {
+                                  const next = [...prev.screenshots];
+                                  [next[idx], next[idx + 1]] = [next[idx + 1], next[idx]];
+                                  return { ...prev, screenshots: next };
+                                })
+                              }
+                              aria-label="Move screenshot right"
+                              className="p-1 rounded border border-slate-800 hover:border-slate-600 disabled:opacity-30"
+                            >
+                              <ArrowRight className="w-3 h-3" />
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
